@@ -36,6 +36,57 @@ If you are interested in helping conserve the wildlife in Yellowstone and the la
 
 *Note: The above links direct to the respective posts on the Big Sky Wildlife website.*
 
+## WordPress Troubleshooting: 403 Forbidden Error
+
+The site has experienced recurring 403 Forbidden errors. Below are the diagnosed cause and fix steps using cPanel.
+
+### Diagnosis
+
+- All pages (homepage, wp-login.php, wp-admin) return HTTP 403
+- This indicates the web server is blocking all requests before WordPress even loads
+- Most common cause: corrupted or misconfigured `.htaccess` file in the WordPress root directory
+
+### Fix: Reset .htaccess via cPanel File Manager
+
+1. **Log in to cPanel** and open **File Manager**
+2. Navigate to your WordPress root directory (usually `public_html/`)
+3. **Enable hidden files**: Click "Settings" (top right) and check "Show Hidden Files (dotfiles)"
+4. Find the `.htaccess` file in `public_html/`
+5. **Rename it** to `.htaccess_backup` (right-click > Rename) — this disables the old rules
+6. **Create a new `.htaccess` file** (top left "+ File" button) with the default WordPress rewrite rules:
+
+```apache
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
+```
+
+7. **Test the site** — it should load again
+8. Go to **WordPress Admin > Settings > Permalinks** and click "Save Changes" (this regenerates `.htaccess` properly)
+
+### If .htaccess Reset Doesn't Fix It
+
+Check these additional causes in cPanel:
+
+- **File Permissions**: In File Manager, verify `public_html/` is set to `755` and files are `644`. Select all files > Change Permissions if needed.
+- **Directory Index**: In cPanel > "Indexes", make sure your WordPress directory is not set to "No Indexing" — set it to "Default" or "Inherited".
+- **IP Blocklist**: Check cPanel > "IP Blocker" to make sure your IP (or all IPs) aren't blocked.
+- **ModSecurity**: In cPanel > "ModSecurity", try temporarily disabling it to see if a WAF rule is causing the block.
+- **Security Plugins**: If the site loads after `.htaccess` reset, a plugin like Wordfence or Sucuri may be re-corrupting it. Rename `wp-content/plugins/` to `wp-content/plugins_disabled/` via File Manager to disable all plugins, then re-enable them one by one to find the culprit.
+
+### Preventing Recurrence
+
+- Keep a backup of the working `.htaccess` file
+- If a security plugin (Wordfence, Sucuri, etc.) is adding rules to `.htaccess`, review its settings to prevent overly aggressive blocking
+- Set up uptime monitoring (e.g., UptimeRobot free tier) to get alerts when the site goes down
+
 ---
 
 *This Markdown file was generated based on content from [Big Sky Wildlife](https://bigskywildlife.com).*

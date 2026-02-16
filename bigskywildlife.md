@@ -81,11 +81,68 @@ Check these additional causes in cPanel:
 - **ModSecurity**: In cPanel > "ModSecurity", try temporarily disabling it to see if a WAF rule is causing the block.
 - **Security Plugins**: If the site loads after `.htaccess` reset, a plugin like Wordfence or Sucuri may be re-corrupting it. Rename `wp-content/plugins/` to `wp-content/plugins_disabled/` via File Manager to disable all plugins, then re-enable them one by one to find the culprit.
 
+### Root Cause: 9GB Storage Bloat on Bluehost (10GB Limit)
+
+Jetpack reported the site is using **9GB of a 10GB storage limit**. A full or near-full disk on Bluehost can directly cause 403 errors because WordPress and the server can't write temp files, sessions, or cache. This is the most likely root cause of the recurring 403.
+
+For a wildlife photography site using a **Sony A7RV (61 megapixels)**, images are almost certainly the largest storage consumer. A single full-res JPEG from this camera is 20-40MB, and WordPress auto-generates multiple thumbnail sizes per upload (thumbnail, medium, medium_large, large, 1536x1536, 2048x2048, plus any theme-specific sizes). This means each uploaded photo can consume **5-10x its original file size** on disk.
+
+### Step 1: Identify What's Using Space (cPanel)
+
+1. Log into **cPanel > File Manager**
+2. Check the sizes of these directories in `public_html/`:
+   - `wp-content/uploads/` — this is where all media lives (likely the biggest)
+   - `wp-content/backups/` or `wp-content/updraft/` — old backup files from plugins
+   - `wp-content/cache/` — caching plugin data
+   - `wp-content/ai1wm-backups/` — All-in-One WP Migration backups
+3. In cPanel, go to **Disk Usage** to see a breakdown by directory
+
+### Step 2: Clean Up Old Backups (Biggest Quick Win)
+
+Backup plugins often store full-site backups on the server itself. These are huge.
+
+1. In File Manager, check for and **delete old backup files** in:
+   - `wp-content/updraft/` (UpdraftPlus)
+   - `wp-content/ai1wm-backups/` (All-in-One WP Migration)
+   - `wp-content/backups/` (various plugins)
+   - Any `.zip`, `.tar.gz`, or `.sql` files in the root or `wp-content/`
+2. Since Jetpack VaultPress is handling backups in the cloud, you do **not** need local backup files on the server
+
+### Step 3: Optimize Images (Long-Term Fix)
+
+This is critical for a photography site to stay under storage limits:
+
+1. **Install ShortPixel or Imagify plugin** (after the 403 is resolved):
+   - These compress existing and future uploads automatically
+   - Use "Lossy" or "Glossy" compression — visually identical but 60-80% smaller
+   - Run the bulk optimizer on all existing images
+2. **Remove unused thumbnail sizes**: Add this to your theme's `functions.php` to prevent WordPress from generating sizes you don't use:
+   ```php
+   function bsw_remove_extra_image_sizes() {
+       remove_image_size('1536x1536');
+       remove_image_size('2048x2048');
+   }
+   add_action('init', 'bsw_remove_extra_image_sizes');
+   ```
+3. **Regenerate thumbnails** after removing unused sizes (use the "Regenerate Thumbnails" plugin) — this deletes the old unused sizes and reclaims space
+4. **Resize before uploading**: Resize photos to a max of 2400px on the longest edge before uploading. Full 61MP images (9504x6336px) are far larger than any screen needs.
+
+### Step 4: Offload Media Storage (Optional, Recommended)
+
+To avoid hitting Bluehost's storage limit again as you add more photos:
+
+1. **Jetpack Site Accelerator** (free, already have Jetpack): In WP Admin > Jetpack > Settings > Performance, enable "Site Accelerator." This serves images from WordPress.com's CDN instead of your server.
+2. **Alternative**: Use the "WP Offload Media Lite" plugin with a cloud storage provider (Cloudflare R2, Amazon S3, etc.) to move all media off Bluehost entirely.
+
 ### Preventing Recurrence
 
 - Keep a backup of the working `.htaccess` file
 - If a security plugin (Wordfence, Sucuri, etc.) is adding rules to `.htaccess`, review its settings to prevent overly aggressive blocking
 - Set up uptime monitoring (e.g., UptimeRobot free tier) to get alerts when the site goes down
+- Resize photos before uploading (max 2400px longest edge)
+- Use an image optimization plugin (ShortPixel or Imagify) for automatic compression
+- Do not store backups locally on the server — rely on Jetpack VaultPress cloud backups
+- Consider enabling Jetpack Site Accelerator to serve images from a CDN
 
 ---
 
